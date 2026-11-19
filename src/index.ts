@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { mountOnce } from './mount-once.ts'
@@ -22,7 +23,13 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export const name = 'dsh-usage'
-export const inject = ['webServer']
+/**
+ * The `connection` service supplies the platform's admission policy for the
+ * usage routes (the Host/Origin fence plus browser-session authentication).
+ * Without it the routes would be reachable by anything that can open a socket
+ * to the host port.
+ */
+export const inject = ['webServer', 'connection']
 /**
  * Family settings namespace this row serves. Since 0.1.7 the settings surface
  * addresses one form per profile entry id and the Host generates this row's
@@ -136,7 +143,7 @@ let pendingStop: Promise<unknown> | undefined
  * @param ctx - host root context.
  * @param config - the row's resolved configuration.
  */
-export const apply = mountOnce('@linxin666/dsh-usage', (ctx: Context, config?: UsageConfigFields): void => {
+export const apply = mountOnce('@jasonliu/dsh-usage', (ctx: Context, config?: UsageConfigFields): void => {
   let live = true
   let service: UsageService | undefined
   let disposeRoutes: (() => void) | undefined

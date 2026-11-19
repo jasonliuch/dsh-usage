@@ -7,14 +7,28 @@ import { emptyTotals, type UsageDayView, type UsageOverviewView } from '../src/c
 import type { UsageService } from '../src/host/usage-service.ts'
 import { makeUsageDayRoute, makeUsageOverviewRoute, makeUsageRefreshRoute, USAGE_API_PREFIX } from '../src/host/routes.ts'
 
-/** Host context double: no remote-web-ui pairing service, so the fence is loopback-only. */
-const HOST_CTX = { get: () => undefined } as never
+/**
+ * Route-surface tests: the platform's admission decision, the POST-only
+ * refresh method gate, and the JSON response contract. The service is a stub —
+ * the service-level behaviors live in usage-service.spec.ts.
+ */
 
 /**
- * Route-surface tests: the loopback fence, the POST-only refresh method
- * gate, and the JSON response contract. The service is a stub — the
- * service-level behaviors live in usage-service.spec.ts.
+ * A host context whose `connection` service admits every request. The plugin
+ * owns no fence of its own, so this double IS the trust decision under test.
  */
+function admittingCtx(): never {
+  return { connection: { requestRejection: () => undefined } } as never
+}
+
+/**
+ * A host context whose `connection` service refuses with the given status.
+ * @param status - the platform's rejection status (401 or 403).
+ * @returns a host context double.
+ */
+function rejectingCtx(status: 401 | 403): never {
+  return { connection: { requestRejection: () => status } } as never
+}
 
 const OVERVIEW: UsageOverviewView = {
   updatedAt: 1,
@@ -40,9 +54,9 @@ let refreshes = 0
 beforeAll(async () => {
   refreshes = 0
   const routes: WebRoute[] = [
-    makeUsageOverviewRoute(HOST_CTX, stubService()),
-    makeUsageDayRoute(HOST_CTX, stubService()),
-    makeUsageRefreshRoute(HOST_CTX, stubService({ refresh: async () => { refreshes += 1 } })),
+    makeUsageOverviewRoute(admittingCtx(), stubService()),
+    makeUsageDayRoute(admittingCtx(), stubService()),
+    makeUsageRefreshRoute(admittingCtx(), stubService({ refresh: async () => { refreshes += 1 } })),
   ]
   server = createServer((req, res) => {
     const pathname = (req.url ?? '').split('?')[0]!
@@ -65,6 +79,16 @@ afterAll(async () => {
 
 const url = (path: string) => `http://127.0.0.1:${port}${path}`
 
+/** A response double that records the status and body a handler wrote. */
+function probe(): { res: ServerResponse; state: { status: number; body: string } } {
+  const state = { status: 0, body: '' }
+  const res = {
+    writeHead: (code: number) => { state.status = code },
+    end: (chunk?: string) => { state.body = chunk ?? '' },
+  } as unknown as ServerResponse
+  return { res, state }
+}
+
 describe('usage routes', () => {
   it('serves the overview with family JSON headers and no-store', async () => {
     const res = await fetch(url(USAGE_API_PREFIX + '/overview'))
@@ -75,7 +99,7 @@ describe('usage routes', () => {
   })
 
   it('user gets one retained day served for a date query', async () => {
-    // Given a loopback request for a day the ledger recorded
+    // Given an admitted request for a day the ledger recorded
     const res = await fetch(url(USAGE_API_PREFIX + '/day?date=2026-08-28'))
     // When the day route answers
     // Then the day's per-provider totals come back under the day envelope, uncached
@@ -107,80 +131,77 @@ describe('usage routes', () => {
   })
 
   it('answers 500 when the refresh cycle fails', async () => {
-    const routes = [makeUsageRefreshRoute(HOST_CTX, stubService({ refresh: async () => { throw new Error('probe boom') } }))]
-    const state = { status: 0, body: '' }
-    const res = {
-      writeHead: (status: number) => { state.status = status },
-      end: (body?: string) => { state.body = body ?? '' },
-    } as unknown as ServerResponse
+    const routes = [makeUsageRefreshRoute(admittingCtx(), stubService({ refresh: async () => { throw new Error('probe boom') } }))]
+    const { res, state } = probe()
     await routes[0]!.handler({ method: 'POST', socket: { remoteAddress: '127.0.0.1' }, headers: { host: '127.0.0.1:3080' } } as unknown as IncomingMessage, res)
     expect(state.status).toBe(500)
     expect(JSON.parse(state.body)).toEqual({ ok: false, error: 'probe boom' })
   })
 
-  it('fences non-loopback clients out of both endpoints', () => {
-    const probe = () => {
-      const state = { status: 0, body: '' }
-      return {
-        res: {
-          writeHead: (code: number) => { state.status = code },
-          end: (chunk?: string) => { state.body = chunk ?? '' },
-        },
-        state,
-      }
-    }
-    const lanRequest = { method: 'GET', socket: { remoteAddress: '192.168.1.9' }, headers: { host: '192.168.1.9:3080' } }
+  it('refuses every endpoint the platform does not admit', () => {
+    // Given the platform refusing with 401 (no usable credential)
+    const request = { method: 'GET', socket: { remoteAddress: '192.168.1.9' }, headers: { host: '192.168.1.9:3080' } }
 
     const overview = probe()
-    void makeUsageOverviewRoute(HOST_CTX, stubService()).handler(lanRequest as never, overview.res as never)
-    expect(overview.state.status).toBe(403)
-    expect(overview.state.body).toContain('loopback-only')
+    void makeUsageOverviewRoute(rejectingCtx(401), stubService()).handler(request as never, overview.res)
+    expect(overview.state.status).toBe(401)
+    expect(JSON.parse(overview.state.body)).toEqual({ ok: false, error: 'unauthorized' })
 
     const refresh = probe()
-    void makeUsageRefreshRoute(HOST_CTX, stubService()).handler({ ...lanRequest, method: 'POST' } as never, refresh.res as never)
-    expect(refresh.state.status).toBe(403)
+    void makeUsageRefreshRoute(rejectingCtx(401), stubService()).handler({ ...request, method: 'POST' } as never, refresh.res)
+    expect(refresh.state.status).toBe(401)
 
     const day = probe()
-    void makeUsageDayRoute(HOST_CTX, stubService()).handler({ ...lanRequest, url: '/api/dsh-usage/day?date=2026-08-28' } as never, day.res as never)
-    expect(day.state.status).toBe(403)
-    expect(day.state.body).toContain('loopback-only')
+    void makeUsageDayRoute(rejectingCtx(401), stubService()).handler({ ...request, url: '/api/dsh-usage/day?date=2026-08-28' } as never, day.res)
+    expect(day.state.status).toBe(401)
+    expect(JSON.parse(day.state.body)).toEqual({ ok: false, error: 'unauthorized' })
   })
 
-  it('admits a paired LAN device through the family pairing fence (issue #1592)', () => {
-    const state = { status: 0, body: '' }
-    const res = {
-      writeHead: (code: number) => { state.status = code },
-      end: (chunk?: string) => { state.body = chunk ?? '' },
-    }
-    // remote-web-ui exposes ctx.remoteWebUiPairing; a paired cookie passes the
-    // shared fence, an unpaired LAN request is still refused.
-    const paired = { get: (name: string, _strict?: boolean) => (name === 'remoteWebUiPairing' ? { isPairedDevice: () => true } : undefined) } as never
+  it('answers 403 when the platform fence refuses the request', () => {
+    const { res, state } = probe()
     const request = { method: 'GET', socket: { remoteAddress: '192.168.1.9' }, headers: { host: '192.168.1.9:3080' } }
-    void makeUsageOverviewRoute(paired, stubService()).handler(request as never, res as never)
-    expect(state.status).toBe(200)
-
-    const unpaired = { get: (name: string) => (name === 'remoteWebUiPairing' ? { isPairedDevice: () => false } : undefined) } as never
-    const refused = { status: 0, body: '' }
-    void makeUsageOverviewRoute(unpaired, stubService()).handler(request as never, {
-      writeHead: (code: number) => { refused.status = code },
-      end: (chunk?: string) => { refused.body = chunk ?? '' },
-    } as never)
-    expect(refused.status).toBe(403)
-    expect(refused.body).toContain('loopback-only')
+    void makeUsageOverviewRoute(rejectingCtx(403), stubService()).handler(request as never, res)
+    expect(state.status).toBe(403)
+    expect(JSON.parse(state.body)).toEqual({ ok: false, error: 'forbidden' })
   })
 
-  it('fences cross-site browser requests even from a loopback socket', () => {
-    const state = { status: 0, body: '' }
-    const res = {
-      writeHead: (code: number) => { state.status = code },
-      end: (chunk?: string) => { state.body = chunk ?? '' },
-    }
+  it('never consults the service for a refused request', async () => {
+    // Given a service that would leak if the handler ran
+    let consulted = 0
+    const leaky = {
+      overview: () => { consulted += 1; return OVERVIEW },
+      day: () => { consulted += 1; return DAY },
+      refresh: async () => { consulted += 1 },
+    } as unknown as UsageService
+
+    // When every endpoint answers a refused request
+    const request = { method: 'GET', socket: { remoteAddress: '192.168.1.9' }, headers: { host: '192.168.1.9:3080' } }
+    const overview = probe()
+    void makeUsageOverviewRoute(rejectingCtx(401), leaky).handler(request as never, overview.res)
+    const day = probe()
+    void makeUsageDayRoute(rejectingCtx(401), leaky).handler({ ...request, url: '/api/dsh-usage/day?date=2026-08-28' } as never, day.res)
+    const refresh = probe()
+    void makeUsageRefreshRoute(rejectingCtx(401), leaky).handler({ ...request, method: 'POST' } as never, refresh.res)
+
+    // Then the service was never asked for anything
+    expect(consulted).toBe(0)
+  })
+
+  it('does not admit a paired-device cookie on its own', () => {
+    // Given a context that exposes the pairing service the plugin used to
+    // consult: a paired device is NOT a credential for the usage data anymore
+    const paired = {
+      connection: { requestRejection: () => 401 },
+      get: (name: string, _strict?: boolean) => (name === 'remoteWebUiPairing' ? { isPairedDevice: () => true } : undefined),
+    } as never
+    const { res, state } = probe()
     const request = {
       method: 'GET',
-      socket: { remoteAddress: '127.0.0.1' },
-      headers: { host: '127.0.0.1:3080', 'sec-fetch-site': 'cross-site' },
+      socket: { remoteAddress: '192.168.1.9' },
+      headers: { host: '192.168.1.9:3080', cookie: 'dsh_pair=deadbeef' },
     }
-    void makeUsageOverviewRoute(HOST_CTX, stubService()).handler(request as never, res as never)
-    expect(state.status).toBe(403)
+    void makeUsageOverviewRoute(paired, stubService()).handler(request as never, res)
+    // Then the request is refused on the platform's decision alone
+    expect(state.status).toBe(401)
   })
 })

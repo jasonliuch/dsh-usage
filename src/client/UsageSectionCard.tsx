@@ -4,9 +4,9 @@
  * usage, balances, trend; 个人套餐: per-provider plan quota windows; Token
  * 银行: the whale-yuan voucher minted from every provider's ledger usage)
  * and, under them, the display rows. Data comes from the host's
- * loopback-fenced /api/dsh-usage/overview document; polling runs only while
+ * admission-protected /api/dsh-usage/overview document; polling runs only while
  * the section is mounted and the tab is visible.
- * @module @linxin666/dsh-usage/client/UsageSectionCard
+ * @module @jasonliu/dsh-usage/client/UsageSectionCard
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'

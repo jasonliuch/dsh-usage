@@ -3,7 +3,7 @@
  * billing currency (CNY), and that stored value never moves. This module turns
  * one CNY figure into the currency the user chose to READ it in, so switching
  * the display is a rendering decision, not a data migration (issue #1937).
- * @module @linxin666/dsh-usage/core/spend
+ * @module @jasonliu/dsh-usage/core/spend
  */
 
 /** A currency the spend display can render. */
@@ -20,9 +20,8 @@ export interface SpendDisplay {
 /**
  * The rate used when the row configures none: a plain default, so an
  * unconfigured display still has a defined美元 figure instead of a blank card.
- * The plugin never fetches a live rate (its host routes are loopback-fenced and
- * its browser half has no network), so there is no fetch that could fail and
- * leave the card empty.
+ * The plugin never fetches a live rate (its browser half has no network), so
+ * there is no fetch that could fail and leave the card empty.
  */
 export const DEFAULT_CNY_PER_USD = 7.2
 

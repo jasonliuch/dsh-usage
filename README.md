@@ -3,7 +3,7 @@
 English | [中文](README.zh.md)
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/@linxin666/dsh-usage?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/npm/v/@jasonliu/dsh-usage?style=flat-square" alt="Version">
   &nbsp;
   <img src="https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.3-4c6ef5?style=flat-square&amp;labelColor=454a54" alt="DSH">
   &nbsp;
@@ -37,6 +37,15 @@ It covers the official DeepSeek routes only — relay traffic billed elsewhere (
 
 The published rule bills a Chinese public holiday entirely off-peak even on a Monday-Friday, and bills an adjusted workday falling on a Saturday or Sunday off-peak too. Weekends are therefore already off-peak by construction, and this package ships the State Council holiday table (`src/core/holidays.ts`, 2020 through 2026, taken from the MIT-licensed [chinese-holidays-node](https://github.com/bastengao/chinese-holidays-node) yearly data with only its `holiday` entries), so a public-holiday weekday is estimated at the off-peak row instead of reading up to about twice the real spend. A year the table does not cover (later than 2026) falls back to the published windows, which reads high rather than low — the safer direction to be wrong in.
 
+## Security model
+
+- The three usage routes (`/api/dsh-usage/overview`, `/day`, `/refresh`) carry personal account data, so they answer under the platform's own admission policy: the Host/Origin fence (DNS-rebinding defense) plus a live signed browser session cookie. That is the same policy every other `/api` route in the GUI obeys, so a request without a usable credential is refused with `401` and a request the fence refuses is refused with `403`.
+- The plugin owns no access-control logic of its own and depends on no third-party pairing service. A paired-device cookie from another plugin is not a credential for the usage data.
+- API keys and OAuth access tokens never leave the host process for the browser: the overview document reports only WHICH credential kind a provider holds (`none` / `api-key` / `env` / `oauth`), never its value.
+- Probes run host-side against the provider's own balance or quota endpoint. The destination is constrained to an exact HTTPS hostname match against the built-in vendor catalog, so a route configured with an unknown `baseURL` is never probed and its key is never sent. A Codex probe forwards the OAuth access token to `chatgpt.com` only; the refresh token is never sent.
+- The ledger and the provider snapshots record token counters, model ids, provider ids and cost estimates only. No prompt, message, tool-call or file content is recorded.
+- The ledger and snapshots live in `~/.dsh/dsh-usage/`; treat that directory as sensitive (it describes your workload) and keep it readable only by your user account.
+
 ## Install
 
 Requires DSH 0.2.2-rc.3 or later: the plugin is developed against the 0.2.2-rc.3 DSH cohort (its settings page is the Host-generated page of the plugin's own Config schema) and its `@deepseek-ai/*` runtime imports are provided by the host itself.
@@ -44,7 +53,7 @@ Requires DSH 0.2.2-rc.3 or later: the plugin is developed against the 0.2.2-rc.3
 In your profile (e.g. `~/.dsh/profiles/web`):
 
 ```bash
-pnpm add @linxin666/dsh-usage
+pnpm add @jasonliu/dsh-usage
 ```
 
 and insert into `cordis.patch.yml` (or use the bundle patch):
@@ -52,7 +61,7 @@ and insert into `cordis.patch.yml` (or use the bundle patch):
 ```yaml
 - insert:
     - id: usage
-      name: '@linxin666/dsh-usage'
+      name: '@jasonliu/dsh-usage'
 ```
 
 Restart `dsh web` for the host half; the client half applies on refresh. A full family install opens `Settings -> Web Extensions -> Usage`; a standalone install keeps `Settings -> Usage Statistics`.

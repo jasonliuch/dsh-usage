@@ -3,7 +3,7 @@
 [English](README.md) | 中文
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/@linxin666/dsh-usage?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/npm/v/@jasonliu/dsh-usage?style=flat-square" alt="Version">
   &nbsp;
   <img src="https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.3-4c6ef5?style=flat-square&amp;labelColor=454a54" alt="DSH">
   &nbsp;
@@ -37,6 +37,15 @@
 
 官方口径对中国法定节假日全天按空闲计费（即使落在周一至周五），落在周六周日的调休上班日同样按空闲计费。因此周末天然就是空闲时段；本包内置国务院办公厅公布的节假日表（`src/core/holidays.ts`，2020 至 2026 年，取自 MIT 许可的 [chinese-holidays-node](https://github.com/bastengao/chinese-holidays-node) 年度数据、只取 `holiday` 条目），法定节假日的工作日按空闲档估算，不再出现约两倍的高估。表中没有的年份（晚于 2026）按公布的峰谷时段处理，即工作日按高峰档——估算偏高而非偏低，是更安全的误差方向。
 
+## 安全模型
+
+- 三条使用统计路由（`/api/dsh-usage/overview`、`/day`、`/refresh`）承载个人账户数据，因此一律走平台自身的准入策略：Host/Origin 闸（防 DNS rebinding）加上有效的签名浏览器会话 cookie。这与 GUI 里其他所有 `/api` 路由的策略一致：没有可用凭据的请求被拒（`401`），被闸拒绝的请求也被拒（`403`）。
+- 插件自身不实现任何访问控制逻辑，也不依赖任何第三方配对服务。别的插件派发的配对设备 cookie 不是读取用量数据的凭据。
+- API key 与 OAuth access token 不会离开宿主进程进入浏览器：概览文档只报告每个 provider 持有何种凭据（`none` / `api-key` / `env` / `oauth`），绝不报告其值。
+- 探测在宿主侧发往 provider 自己的余额或配额端点。目标地址限定为内置厂商目录里的精确 HTTPS 主机名匹配，因此配置了未知 `baseURL` 的路由不会被探测，其 key 也不会被送出。Codex 探测只把 OAuth access token 转发给 `chatgpt.com`，refresh token 永不外发。
+- 台账与 provider 快照只记录 token 计数、model id、provider id 与花费估算，不记录任何 prompt、消息、工具调用或文件内容。
+- 台账与快照存放在 `~/.dsh/dsh-usage/`；该目录描述了你的工作负载特征，请只让本人账户可读。
+
 ## 安装
 
 要求 DSH 0.2.2-rc.3 或更高：插件基于 0.2.2-rc.3 DSH cohort 开发（其设置页即宿主根据插件自身 Config schema 生成的页面），`@deepseek-ai/*` 运行时导入由宿主本体提供。
@@ -44,7 +53,7 @@
 在 profile（如 `~/.dsh/profiles/web`）中：
 
 ```bash
-pnpm add @linxin666/dsh-usage
+pnpm add @jasonliu/dsh-usage
 ```
 
 并插入 `cordis.patch.yml`（或使用 bundle patch）：
@@ -52,7 +61,7 @@ pnpm add @linxin666/dsh-usage
 ```yaml
 - insert:
     - id: usage
-      name: '@linxin666/dsh-usage'
+      name: '@jasonliu/dsh-usage'
 ```
 
 宿主半区需要重启 `dsh web`；客户端半区刷新页面即生效。完整家族安装的入口在 `设置 -> Web 扩展 -> 使用统计`，独立安装时保留 `设置 -> 使用统计`。

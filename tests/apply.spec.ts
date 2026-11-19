@@ -67,6 +67,11 @@ function makeCtx() {
         }
       },
     },
+    // The platform's admission service. The plugin owns no fence of its own,
+    // so the routes consult this one.
+    connection: {
+      requestRejection: () => undefined,
+    },
   }
   return {
     ctx: ctx as never,
@@ -150,6 +155,17 @@ describe('resolveConfig', () => {
 })
 
 describe('host apply', () => {
+  it('declares the platform admission service as a dependency', async () => {
+    // Given the plugin module
+    const { inject } = await loadPlugin()
+    // When its inject list is inspected
+    // Then the connection service is required: the usage routes consult the
+    // platform's admission policy, and a row mounted without that service
+    // would serve the routes with no trust decision at all.
+    expect(inject).toContain('connection')
+    expect(inject).toContain('webServer')
+  })
+
   it('operator gets every usage route registered and the service started when enabled', async () => {
     // Given an enabled plugin and a host context that records routes and listeners
     const { apply } = await loadPlugin()
