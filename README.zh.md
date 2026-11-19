@@ -46,6 +46,16 @@
 - 台账与 provider 快照只记录 token 计数、model id、provider id 与花费估算，不记录任何 prompt、消息、工具调用或文件内容。
 - 台账与快照存放在 `~/.dsh/dsh-usage/`；该目录描述了你的工作负载特征，请只让本人账户可读。
 
+## 来源与授权
+
+本包是一个 fork。原始插件是 [zhu1090093659/dsh-web](https://github.com/zhu1090093659/dsh-web) 里的 `packages/dsh-usage`，作者 **zhu1090093659**，Apache-2.0 授权。
+
+本 fork 由 **jasonliuch** 维护，以 `@jasonliu/dsh-usage` 发布。功能集合与上游一致，只改了访问模型：上游用插件自带的信任闸守卫三条用量路由——回环请求放行，或者任何持有第三方插件派发的配对设备 cookie 的请求放行；本 fork 改为走平台自身的准入策略（`ctx.connection.requestRejection`），也就是 GUI 里其他所有 `/api` 路由共用的策略，并彻底删除了插件自带的闸和配对依赖。台账、provider 探测、计价与浏览器半区均未改动。完整理由（包括被否决的替代方案）见 [docs/usage-routes-platform-admission.md](docs/usage-routes-platform-admission.md)。
+
+上游历史保留在本仓库的 git log 中；上游 monorepo 的共享构建预设随包迁移到 [`shared/`](shared/README.md)。
+
+授权：Apache-2.0，见 [LICENSE](LICENSE)。版权归上游作者与本 fork 维护者，具体见该文件。
+
 ## 安装
 
 要求 DSH 0.2.2-rc.3 或更高：插件基于 0.2.2-rc.3 DSH cohort 开发（其设置页即宿主根据插件自身 Config schema 生成的页面），`@deepseek-ai/*` 运行时导入由宿主本体提供。

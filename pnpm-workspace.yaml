@@ -1,0 +1,30 @@
+packages:
+  - .
+
+# A single-package repository: nothing links in from a sibling checkout.
+autoInstallPeers: false
+
+# The DSH SDK cohort this plugin is built and tested against. The published
+# manifests of these packages either omit runtime dependencies or ship ranges
+# whose prerelease tail would drift onto a newer release candidate, and the
+# host runtime supplies its own copies anyway. Pin the three client packages so
+# a fresh install resolves the same cohort the host runs; `packageExtensions`
+# restores the dependencies dsh-client-store's published manifest leaves out
+# (it imports zustand and immer at module top level).
+overrides:
+  '@deepseek-ai/dsh-client-store': '0.2.2-rc.3'
+  '@deepseek-ai/dsh-client-ui-primitives': '0.2.2-rc.3'
+  '@deepseek-ai/dsh-client-ui-slots': '0.2.2-rc.3'
+
+packageExtensions:
+  '@deepseek-ai/dsh-client-store@0.2.2-rc.3':
+    dependencies:
+      zustand: '~4.4.7'
+      immer: '^10.1.1'
+
+# Prerelease cohort versions are published shortly before they are consumed
+# here, so the release-age guard must not hold them back. Scoped to the exact
+# ranges the manifests declare.
+minimumReleaseAgeExclude:
+  - '@deepseek-ai/*'
+  - '@jasonliu/*'

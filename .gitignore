@@ -1,0 +1,12 @@
+# Build output (the published artifact is built by `pnpm build` / `prepare`)
+lib/
+
+# Dependencies
+node_modules/
+
+# Incremental type-check state
+*.tsbuildinfo
+
+# Editor and OS noise
+.DS_Store
+*.log

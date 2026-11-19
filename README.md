@@ -46,6 +46,16 @@ The published rule bills a Chinese public holiday entirely off-peak even on a Mo
 - The ledger and the provider snapshots record token counters, model ids, provider ids and cost estimates only. No prompt, message, tool-call or file content is recorded.
 - The ledger and snapshots live in `~/.dsh/dsh-usage/`; treat that directory as sensitive (it describes your workload) and keep it readable only by your user account.
 
+## Origin and licence
+
+This package is a fork. The original plugin is `packages/dsh-usage` in [zhu1090093659/dsh-web](https://github.com/zhu1090093659/dsh-web), written by **zhu1090093659** and licensed Apache-2.0.
+
+This fork is maintained by **jasonliuch** and published as `@jasonliu/dsh-usage`. It keeps the upstream feature set and changes one thing: the access model. Upstream guarded the three usage routes with the plugin's own trust fence, which admitted a loopback request, or any request holding a paired-device cookie issued by a third-party plugin. This fork instead answers under the platform's own admission policy (`ctx.connection.requestRejection`), the same policy every other `/api` route in the GUI obeys, and drops the plugin's fence and its pairing dependency entirely. The ledger, the provider probes, the pricing and the browser half are unchanged. The reasoning, including the alternatives that lost, is in [docs/usage-routes-platform-admission.md](docs/usage-routes-platform-admission.md).
+
+Upstream history is preserved in this repository's git log; the upstream monorepo's shared build preset travelled with the package under [`shared/`](shared/README.md).
+
+Licence: Apache-2.0, see [LICENSE](LICENSE). Copyright belongs to the upstream author and to this fork's maintainer as stated there.
+
 ## Install
 
 Requires DSH 0.2.2-rc.3 or later: the plugin is developed against the 0.2.2-rc.3 DSH cohort (its settings page is the Host-generated page of the plugin's own Config schema) and its `@deepseek-ai/*` runtime imports are provided by the host itself.
