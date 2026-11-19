@@ -155,7 +155,7 @@ describe('resolveConfig', () => {
 })
 
 describe('host apply', () => {
-  it('declares the platform admission service as a dependency', async () => {
+  it('operator gets the platform admission service declared as a dependency', async () => {
     // Given the plugin module
     const { inject } = await loadPlugin()
     // When its inject list is inspected

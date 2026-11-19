@@ -138,34 +138,40 @@ describe('usage routes', () => {
     expect(JSON.parse(state.body)).toEqual({ ok: false, error: 'probe boom' })
   })
 
-  it('refuses every endpoint the platform does not admit', () => {
+  it('operator gets every endpoint refused the platform does not admit', () => {
     // Given the platform refusing with 401 (no usable credential)
     const request = { method: 'GET', socket: { remoteAddress: '192.168.1.9' }, headers: { host: '192.168.1.9:3080' } }
 
+    // When each endpoint answers that refused request
     const overview = probe()
     void makeUsageOverviewRoute(rejectingCtx(401), stubService()).handler(request as never, overview.res)
-    expect(overview.state.status).toBe(401)
-    expect(JSON.parse(overview.state.body)).toEqual({ ok: false, error: 'unauthorized' })
-
     const refresh = probe()
     void makeUsageRefreshRoute(rejectingCtx(401), stubService()).handler({ ...request, method: 'POST' } as never, refresh.res)
-    expect(refresh.state.status).toBe(401)
-
     const day = probe()
     void makeUsageDayRoute(rejectingCtx(401), stubService()).handler({ ...request, url: '/api/dsh-usage/day?date=2026-08-28' } as never, day.res)
+
+    // Then every one of them answers 401 in the plugin's own JSON shape
+    expect(overview.state.status).toBe(401)
+    expect(JSON.parse(overview.state.body)).toEqual({ ok: false, error: 'unauthorized' })
+    expect(refresh.state.status).toBe(401)
     expect(day.state.status).toBe(401)
     expect(JSON.parse(day.state.body)).toEqual({ ok: false, error: 'unauthorized' })
   })
 
-  it('answers 403 when the platform fence refuses the request', () => {
+  it('operator gets 403 when the platform fence refuses the request', () => {
+    // Given the platform fence refusing with 403
     const { res, state } = probe()
     const request = { method: 'GET', socket: { remoteAddress: '192.168.1.9' }, headers: { host: '192.168.1.9:3080' } }
+
+    // When the overview answers
     void makeUsageOverviewRoute(rejectingCtx(403), stubService()).handler(request as never, res)
+
+    // Then the refusal carries the forbidden wording
     expect(state.status).toBe(403)
     expect(JSON.parse(state.body)).toEqual({ ok: false, error: 'forbidden' })
   })
 
-  it('never consults the service for a refused request', async () => {
+  it('operator gets the service never consulted for a refused request', async () => {
     // Given a service that would leak if the handler ran
     let consulted = 0
     const leaky = {
@@ -187,7 +193,7 @@ describe('usage routes', () => {
     expect(consulted).toBe(0)
   })
 
-  it('does not admit a paired-device cookie on its own', () => {
+  it('operator gets a paired-device cookie not admitted on its own', () => {
     // Given a context that exposes the pairing service the plugin used to
     // consult: a paired device is NOT a credential for the usage data anymore
     const paired = {
@@ -200,7 +206,10 @@ describe('usage routes', () => {
       socket: { remoteAddress: '192.168.1.9' },
       headers: { host: '192.168.1.9:3080', cookie: 'dsh_pair=deadbeef' },
     }
+
+    // When the overview answers that request
     void makeUsageOverviewRoute(paired, stubService()).handler(request as never, res)
+
     // Then the request is refused on the platform's decision alone
     expect(state.status).toBe(401)
   })
