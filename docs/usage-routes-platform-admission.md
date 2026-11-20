@@ -42,6 +42,15 @@ A request to the usage API now needs a DSH session. Scripts that curled `/api/ds
 
 The plugin no longer needs `dsh-remote-web-ui` for anything. That package can stay in a profile for the mobile pairing QR flow, the `/remote` channel, LAN forwarding and the relay identity — but it contributes nothing to `/api` protection in the 0.2.2-rc.3 cohort either way: its `api/gate` listener has no emitter there, as its own source states.
 
+### Remote devices still work, through a transport rather than a fence
+
+Removing the plugin's fence does **not** remove remote access. It moves the question from "which cookie does the plugin trust" to "which transport carries the browser", and the two independent layers answer differently:
+
+- **Trust** is the platform's, everywhere. A remote browser that holds a real DSH browser session satisfies `requestRejection` exactly as a local one does.
+- **Transport** is the deployment's. A browser reaching the host through a tunnel needs something in front of the host that mints or forwards that DSH session cookie. In the deployment this package was extracted from, that is the local edge proxy: it listens on the LAN interface, exchanges dsh's launch token for a session cookie server-side, and forwards to `127.0.0.1`. A paired-device channel (the `dsh-remote-web-ui` / `remote-bridge` `/remote` proxy) is a second, alternative transport that does the same thing for a QR-paired device.
+
+Measured on that deployment: `GET /api/dsh-usage/overview` through the edge proxy with the public `Host` and Cloudflare forwarding headers answers `200` with the full document, no plugin patch involved; without a credential it answers `401`; and a `dsh_pair` cookie presented directly — not through any proxy — also answers `401`. The paired-device cookie is never a credential for the usage data, whichever transport is in use.
+
 The shared fence modules stayed behind in the upstream monorepo for their other consumers; this package is simply no longer one of the manifest targets.
 
 ## Testing
